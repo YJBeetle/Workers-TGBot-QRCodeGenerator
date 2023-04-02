@@ -1,8 +1,6 @@
-use serde_json::json;
 use worker::*;
 
-use image::Luma;
-use image::{DynamicImage, ImageBuffer, Rgb};
+use image::{DynamicImage, Rgb};
 use qrcode::QrCode;
 
 mod utils;
@@ -34,8 +32,13 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
         .get("/", |_, _| Response::ok("Hello"))
-        .get("/generator", |_, ctx| {
-            let data = "1234";
+        .get("/generator", |req, _| {
+            let url = req.url()?;
+            let data = url
+                .query_pairs()
+                .find(|(key, _)| key == "data")
+                .map(|(_, value)| value.to_string())
+                .unwrap_or_default();
 
             // 生成二维码图像
             let qr_code = QrCode::new(data.as_bytes()).unwrap();
