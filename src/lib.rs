@@ -1,6 +1,10 @@
 use serde_json::json;
 use worker::*;
 
+use image::Luma;
+use image::{DynamicImage, ImageBuffer, Rgb};
+use qrcode::QrCode;
+
 mod utils;
 
 fn log_request(req: &Request) {
@@ -29,26 +33,25 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // functionality and a `RouteContext` which you can use to  and get route parameters and
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
-        .get("/", |_, _| Response::ok("Hello from Workers!"))
-        .post_async("/form/:field", |mut req, ctx| async move {
-            if let Some(name) = ctx.param("field") {
-                let form = req.form_data().await?;
-                match form.get(name) {
-                    Some(FormEntry::Field(value)) => {
-                        return Response::from_json(&json!({ name: value }))
-                    }
-                    Some(FormEntry::File(_)) => {
-                        return Response::error("`field` param in form shouldn't be a File", 422);
-                    }
-                    None => return Response::error("Bad Request", 400),
-                }
-            }
+        .get("/", |_, _| Response::ok("Hello"))
+        .get("/generator", |_, ctx| {
+            let data = "1234";
 
-            Response::error("Bad Request", 400)
-        })
-        .get("/worker-version", |_, ctx| {
-            let version = ctx.var("WORKERS_RS_VERSION")?.to_string();
-            Response::ok(version)
+            // 生成二维码图像
+            let qr_code = QrCode::new(data.as_bytes()).unwrap();
+            let image = qr_code.render::<Rgb<u8>>().build();
+
+            // 将图像转换为 PNG 格式
+            let png_image = DynamicImage::ImageRgb8(image);
+            let mut png_data = Vec::new();
+            png_image
+                .write_to(&mut png_data, image::ImageOutputFormat::Png)
+                .unwrap();
+
+            let mut headers = Headers::new();
+            headers.set("content-type", "image/png")?;
+
+            Ok(Response::from_bytes(png_data)?.with_headers(headers))
         })
         .run(req, env)
         .await
